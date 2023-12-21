@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Pet</title>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      font-family: Arial, sans-serif;
+      color: white;
+      transition: background-color 1s ease;
+      background-color: hsl(178, 85%, 59%);
+    }
+
+    .square {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      font-size: 1.5em;
+    }
+
+    .status {
+      flex: 1;
+    }
+
+    .view {
+      aspect-ratio: 1/1;
+      flex: 0 1 calc(50% - 2px);
+      position: relative;
+	  overflow: hidden;
+      border: 1px solid #fff;
+    }
+	
+	#bbCanvas {
+		image-rendering: pixelated;
+	  aspect-ratio: 1/1;
+      flex: 0 0 calc(50% - 2px);
+      background-size: cover;
+	  position: relative;
+	  border: 1px solid #fff;
+      display: none;
+	}
+	
+	.bgDed {
+      aspect-ratio: 1/1;
+      flex: 0 0 calc(100% - 2px);
+      background-size: cover;
+      display: none;
+    }
+	
+	.square.options {
+	  flex: 1;
+	  display: flex;
+	  flex-wrap: wrap;
+	  justify-content: center;
+	}
+	
+	.shop {
+	  flex: 1;
+	  display: none;
+	  flex-wrap: wrap;
+	  justify-content: center;
+	}
+
+    @media (max-aspect-ratio: 1/1) {
+      .status, .options, .view, #bbCanvas{
+        flex: 0 0 90%;
+      }
+    }
+
+    #status-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 60%;
+    }
+
+    #elapsed-timer, #moneyCounter {
+      margin: 10px;
+      font-size: 20px;
+    }
+
+    #bars-container {
+      display: flex;
+      justify-content: space-around;
+      width: 100%;
+    }
+
+    .status-bar-container {
+      position: relative;
+      margin: 5px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      border: 1px solid #fff;
+    }
+
+    .status-bar {
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      width: 20px;
+      height: 100%;
+      z-index: 1;
+      border-top: 2px solid white;
+      overflow: hidden;
+      align-items: center;
+    }
+
+    .bar-lines {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 20px;
+      height: 100%;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+
+    .bar-line {
+      width: 100%;
+      height: 1px;
+      background-color: #fff;
+    }
+
+    .bar-label {
+      margin-top: 10px;
+      font-size: 12px;
+      text-align: center;
+      width: 100%;
+    }
+
+    #labels-container {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      margin: 5px;
+    }
+	.poop {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		width: 15%;
+		height: 15%;
+		backgroundImage: url('resources/poop.gif');
+		backgroundSize: cover;
+		display: none;
+		z-index: 2;
+	}
+	.pet.animate {
+	  animation: petAnimation 3s forwards; /* Animation lasts 3 seconds */
+	}
+/* just adding 0% rather than to makes the directional flip happen every time... */
+	@keyframes petAnimation {
+	  0% {
+	  transform: translateX(0px) translateY(0px) scaleY(var(--prePetScaleY)) scaleX(var(--prePetScaleX));
+	  }
+	  100% {
+		transform: translateX(var(--petTranslateX)) translateY(var(--petTranslateY)) scaleY(var(--petScaleY)) scaleX(var(--petScaleX));
+	  }
+	}
+
+	.pet.idle {
+	  animation: none; /* Disable animation for idle state */
+	}
+	
+    .pet {
+      position: absolute;
+      width: 25%;
+      height: 25%;
+	  left: 40%;
+	  top: 40%;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+	
+	.square.options button {
+	  width: 40%;
+	  margin: 5px;
+	  padding: 10px;
+	  font-size: 1.5em;
+	  border: 3px solid orange;
+	  background-color: rgba(255, 255, 255, 1); 
+	  color: orange;
+	}
+
+	.square.options button:hover {
+	  background-color: orange;
+	  color: white;
+	  border-color: white;
+	}
+	
+	.square.shop button {
+	  width: 40%;
+	  margin: 5px;
+	  padding: 10px;
+	  font-size: 1.5em;
+	  border: 3px solid orange;
+	  background-color: rgba(255, 255, 255, 1); 
+	  color: orange;
+	}
+
+	.square.shop button:hover {
+	  background-color: orange;
+	  color: white;
+	  border-color: white;
+	}
+
+  </style>
+  <script>
+	  let elapsedMinutes = 0;
+	  let money = 0;
+	  let poop = 0;
+	  let lastStatusHeight = null
+	  let qlty = '';
+	  let qltyTimer = 0;
+	  let Animal = 'snake';
+	  let Verb = 'idle';
+
+	  const bars = {
+		'hunger-bar': { value: 100, rate: 100 / (9 * 60 * 60), multiplier: 2 },
+		'fun-bar': { value: 100, rate: 100 / (5 * 60 * 60), multiplier: 2 },
+		'sleep-bar': { value: 100, rate: 100 / (9 * 60 * 60), multiplier: 1.5 },
+	  };
+
+	  window.onload = function () {
+		initializeCanvasSize();
+		initializeBars();
+		initializeTimer();
+		updateBars();
+		updateBackgroundColor();
+		updatePet();
+		setInterval(movePet, 6000); // Run every 6 seconds
+		
+		bbDrawBall();
+		bbDrawBricks();
+		bbDrawPaddle();
+	  initializePoopAbility();
+	  addPoopToScreen()
+	
+	  };
+
+	  function initializePoopAbility() {
+		// Calculate initial target time
+		const targetTime = elapsedMinutes + getRandomNumber(30, 120);
+
+		// Schedule the first poop appearance
+		schedulePoopAppearance(targetTime);
+	  }
+
+	  function getRandomNumber(min, max) {
+		return Math.floor(Math.random() * (max - min + 1) + min);
+	  }
+
+	  function schedulePoopAppearance(targetTime) {
+		setTimeout(() => {
+		  // Add poop to the screen
+		  poop++;
+		  addPoopToScreen();
+		  setCookie('poop', poop);
+		  // Update bar status multipliers
+		  Object.values(bars).forEach(bar => {
+			  bar.multiplier += 0.5;
+			});
+
+		  // Calculate and schedule the next poop appearance
+		  const nextTargetTime = elapsedMinutes + getRandomNumber(30, 120);
+		  schedulePoopAppearance(nextTargetTime);
+		}, (targetTime - elapsedMinutes) * 60 * 1000); // Convert minutes to milliseconds
+	  }
+
+	  function addPoopToScreen() {
+		const poopDiv = document.querySelector('.poop');
+
+		if (poop == 1) {
+			poopDiv.style.display = 'block';
+		} else if (poop > 1) {
+			poopDiv.style.width = poop * 10 + '%';
+			poopDiv.style.height = poop * 10 + '%';
+		}
+	  }
+
+	  function clean() {
+		const poopDiv = document.querySelector('.poop');
+		  // Check if poop is greater than 0 before cleaning
+		  if (poop > 0) {
+			poop--;
+			addPoopToScreen()
+			// Update bar status multipliers
+			Object.values(bars).forEach(bar => {
+			  bar.multiplier -= 0.5;
+			});
+			if (poop == 0) {
+				poopDiv.style.display = 'none';
+			}
+		}
+		setCookie('poop', poop);
+		}
+	  
+	   function initializeCanvasSize() {
+	  const bbCanvas = document.getElementById('bbCanvas');
+	  const viewDiv = document.querySelector('.view');
+	  const viewRect = viewDiv.getBoundingClientRect();
+	  const canvasWidth = viewRect.width  - 2;
+	  const canvasHeight = viewRect.height;
+
+	  bbCanvas.width = canvasWidth;
+	  bbCanvas.height = canvasHeight;
+	}
+
+	  function initializeBars() {
+		Object.keys(bars).forEach(barId => {
+		  const storedValue = getCookie(barId);
+		  bars[barId].value = storedValue !== "" ? parseFloat(storedValue) : 100;
+		  createStatusBar(barId);
+		});
+	  }
+
+	  function initializeTimer() {
+		const storedTimer = getCookie('timer');
+		elapsedMinutes = storedTimer !== "" ? parseInt(storedTimer) : 0;
+		document.getElementById('elapsed-timer').innerText = `Elapsed Time: ${elapsedMinutes} minutes`;
+		const storedMoney = getCookie('money');
+		money = storedMoney !=="" ? parseInt(storedMoney) : 0;
+		document.getElementById('moneyCounter').innerText = `Money: \$ ${money}`;
+	  }
+
+	  function createStatusBar(barId) {
+		const container = document.createElement('div');
+		container.className = 'status-bar-container';
+
+		const lines = document.createElement('div');
+		lines.className = 'bar-lines';
+
+		for (let i = 0; i < 7; i++) {
+		  const line = document.createElement('div');
+		  line.className = 'bar-line';
+		  lines.appendChild(line);
+		}
+
+		const statusBar = document.createElement('div');
+		statusBar.className = 'status-bar';
+		statusBar.id = barId;
+
+		container.appendChild(lines);
+		container.appendChild(statusBar);
+		document.getElementById('bars-container').appendChild(container);
+	  }
+
+	  function updateBars() {
+		Object.keys(bars).forEach(barId => {
+		  const bar = document.getElementById(barId);
+
+		  if (bars[barId].value > 0) {
+			bars[barId].value = Math.min(100, Math.max(0, (bars[barId].value || 100) - bars[barId].rate * (bars[barId].multiplier || 1)));
+			const percentage = (bars[barId].value / 100) * 100;
+			bar.style.height = `${percentage}%`;
+			
+		// Use the stored lastStatusHeight if .view is hidden
+		  const viewDiv = document.querySelector('.view');
+		  const viewDisplayStyle = window.getComputedStyle(viewDiv).getPropertyValue('display');
+		  if (viewDisplayStyle === 'none' && lastStatusHeight !== null) {
+			const statusBarContainer = document.querySelector('.status-bar-container');
+			statusBarContainer.style.height = `${lastStatusHeight}px`;
+		  } else {
+			// Calculate statusHeight as usual
+			const viewHeight = document.querySelector('.view').offsetHeight;
+			const statusHeight = (viewHeight * 0.2);
+			lastStatusHeight = statusHeight; // Update the lastStatusHeight
+			const statusBarContainer = document.querySelector('.status-bar-container');
+			statusBarContainer.style.height = `${statusHeight}px`;
+		  }
+
+			if (bars[barId].value <= 25) {
+			  bar.style.backgroundColor = 'hsl(35, 70%, 30%)';
+			} else if (bars[barId].value <= 60) {
+			  bar.style.backgroundColor = 'hsl(75, 40%, 50%)';
+			} else {
+			  bar.style.backgroundColor = 'hsl(150, 70%, 50%)';
+			}
+		  } else {
+			bars[barId].value = 0;
+			bar.style.height = '0%';
+			bar.style.backgroundColor = 'hsl(0, 0%, 0%)';
+		  }
+
+		  setCookie(barId, bars[barId].value);
+		});
+
+		updateBackgroundColor();
+		updateQlty();
+		 console.log(poop);
+	  }
+
+	  function updateQlty() {
+		const total = bars['hunger-bar'].value + bars['fun-bar'].value + bars['sleep-bar'].value;
+
+		if (total > 250) {
+		  setQlty('best');
+		} else if (total < 100) {
+		  setQlty('poor');
+		} else {
+		  setQlty('good');
+		}
+	  }
+
+	  function setQlty(newQlty) {
+		if (qlty !== newQlty) {
+		  qltyTimer = 0;
+		  qlty = newQlty;
+		} else {
+		  qltyTimer++;
+		}
+	  }
+
+	  function updateBackgroundColor() {
+	    let petDiv = document.querySelector('.pet');
+		const hunger = bars['hunger-bar'].value || 0;
+		const fun = bars['fun-bar'].value || 0;
+		const sleep = bars['sleep-bar'].value || 0;
+
+		const h = Math.round((hunger / 100) * 178);
+		const s = Math.round((fun / 100) * 85);
+		const l = Math.round((sleep / 100) * 59);
+
+		document.body.style.backgroundColor = `hsl(${h}, ${s}%, ${l}%)`;
+
+		const bgDed = document.querySelector('.bgDed');
+
+		if (hunger === 0 && fun === 0 && sleep === 0) {
+		  back();
+		  bgDed.style.display = 'flex';
+		  petDiv.style.display = 'none';
+		}
+
+		if (bgDed.style.display === 'flex') {
+		  elapsedMinutes = 0;
+		  money = 0;
+		  setCookie('money', money);
+		  document.getElementById('elapsed-timer').innerText = 'Elapsed Time: 0 minutes';
+		  document.getElementById('moneyCounter').innerText = `Money: \$ ${money}`;
+
+		  Object.keys(bars).forEach(barId => {
+			bars[barId].value = 100;
+			const bar = document.getElementById(barId);
+			bar.style.height = '100%';
+			bar.style.backgroundColor = 'hsl(150, 70%, 50%)';
+			setCookie(barId, bars[barId].value);
+		  });
+		}
+
+		  updateQlty();
+		}
+
+	  function feed() {
+	    const shopDiv = document.querySelector('.shop');
+		const optionsDiv = document.querySelector('.options');
+	    shopDiv.style.display = 'flex';
+		optionsDiv.style.display = 'none';
+	  }
+
+	  function play() {
+		  const viewDiv = document.querySelector('.view');
+		 viewDiv.style.display = 'none';
+		const bbCanvas = document.getElementById('bbCanvas');
+		bbCanvas.style.display = 'block';
+	  }
+
+	  function rest() {
+		bars['sleep-bar'].value += 15;
+		updateBars();
+	  }
+	  
+	  function back() {
+	    const viewDiv = document.querySelector('.view');
+		viewDiv.style.display = 'block';
+		const bbCanvas = document.getElementById('bbCanvas');
+		//pausebb
+		bbCanvas.style.display = 'none';
+	  }
+	  
+	  function munch() {
+		if (money > 14) {
+			bars['hunger-bar'].value += 15;
+			bars['fun-bar'].value += 7;
+			bars['sleep-bar'].value += 5;
+			updateBars();
+			money = money - 15;
+			drawScore();
+		}
+	  }
+	  
+	  function snack() {
+		if (money > 8) {
+			bars['hunger-bar'].value += 10;
+			bars['fun-bar'].value += 5;
+			updateBars();
+			money = money - 9;
+			drawScore();
+		}
+	  }
+	  
+	  function taste() {
+		if (money > 4) {
+			bars['hunger-bar'].value += 5;
+			updateBars();
+			money = money - 5;
+			drawScore();
+		}
+	  }
+	  
+	  function shopBack() {
+		const shopDiv = document.querySelector('.shop');
+		const optionsDiv = document.querySelector('.options');
+	    shopDiv.style.display = 'none';
+		optionsDiv.style.display = 'flex';
+	  }
+
+	  function updateTimer() {
+		elapsedMinutes++;
+		document.getElementById('elapsed-timer').innerText = `Elapsed Time: ${elapsedMinutes} minutes`;
+		setCookie('timer', elapsedMinutes);
+	  }
+	  
+	  function drawScore() {
+	  document.getElementById('moneyCounter').innerText = `Money: \$ ${money}`;
+	  setCookie('money', money);
+	  }
+
+	  function getCookie(name) {
+		const cookieName = `${name}=`;
+		const cookies = document.cookie.split(';');
+
+		for (let i = 0; i < cookies.length; i++) {
+		  let cookie = cookies[i].trim();
+		  if (cookie.indexOf(cookieName) === 0) {
+			return cookie.substring(cookieName.length, cookie.length);
+		  }
+		}
+		return "";
+	  }
+
+	  function setCookie(name, value) {
+		  const cookieOptions = {
+			path: '/',
+			sameSite: 'Lax', // Adjust as needed (None, Lax, Strict)
+			// secure: true, // Uncomment this line if your site is served over HTTPS
+		  };
+
+		  document.cookie = `${name}=${value}; ${Object.entries(cookieOptions).map(([key, val]) => `${key}=${val}`).join('; ')}`;
+		}
+
+
+	  setInterval(updateBars, 1000);
+	  setInterval(updateTimer, 60000);
+	</script>
+
+
+</head>
+<body>
+  <div class="square status">
+    <div id="status-container">
+      <div id="elapsed-timer">Elapsed Time: 0 minutes</div>
+	  <div id="moneyCounter">Money: $0</div>
+      <div id="bars-container"></div>
+      <div id="labels-container">
+        <div class="bar-label"><strong>HUNGER</strong></div>
+        <div class="bar-label"><strong>FUN</strong></div>
+        <div class="bar-label"><strong>SLEEP</strong></div>
+      </div>
+    </div>
+  </div>
+	<canvas id="bbCanvas" class="square" style="background-image: url('resources/bg-beach.png'); background-size: cover;"></canvas>
+  <div class="square view" style="background-image: url('resources/bg-beach.png'); background-size: cover;">
+  <div class="poop"></div>
+    <div class="bgDed" style="background-image: url('resources/bg-ded.png');"></div>
+	
+    <div class="pet"></div>
+  </div>
+
+  <div class="square options">
+    <button onclick="feed()">Feed</button>
+    <button onclick="play()">Play</button>
+    <button onclick="rest()">Rest</button>
+	<button onclick="clean()">Clean</button>
+	<button onclick="back()">Back</button>
+  </div>
+  <div class="square shop">
+	<button onclick="munch()">Monch<br>$15</button>
+	<button onclick="snack()">Snack<br>$9</button>
+	<button onclick="taste()">Taste<br>$5</button>
+	<button onclick="shopBack()">Back</button>
+  <script>
+	  let viewDiv = document.querySelector('.view');
+	let petDiv = document.querySelector('.pet');
+	let viewRect = viewDiv.getBoundingClientRect();
+	let viewDivH = viewDiv.clientHeight;
+	let viewDivW = viewDiv.clientWidth;
+	let scale = 1;
+	let flip = 1;
+	let minY = (viewDivH * 0.35) + viewRect.top;
+	let maxY = (viewDivH * 0.65) + viewRect.top;
+	let minX = (viewDivW * 0.05) + viewRect.left;
+	let maxX = (viewDivW * 0.75) + viewRect.left;
+	
+
+	function getRandomCoordinate() {
+		randomY = Math.round(Math.random() * (maxY - minY) + minY);
+		randomX = Math.round(Math.random() * (maxX - minX) + minX);
+		//console.log(`left: ${viewLeft}`);
+		return { randomX, randomY };
+	}
+
+	function updatePet() {
+		const petDiv = document.querySelector('.pet');
+
+		// Set background image
+		const petImageUrl = `resources/${Animal}-${qlty}-${Verb}.gif`;
+		petDiv.style.backgroundImage = `url('${petImageUrl}')`;
+	}
+
+	function movePet() {
+		const computedStyle = getComputedStyle(petDiv);
+
+		const currentLeft = parseFloat(computedStyle.left);
+		const currentTop = parseFloat(computedStyle.top);
+
+		// Choose a random coordinate
+		const petRect = petDiv.getBoundingClientRect();
+		const { randomX, randomY } = getRandomCoordinate();
+
+		const travelX = Math.round(randomX - petRect.left);
+		const travelY = Math.round(randomY - petRect.top);
+
+		// Check travelY and apply scale
+		const distanceV = currentTop + travelY;
+
+		// scales .pet size according to y range
+		let snakeMini = 0.6;
+		let snakeMax = 1.15;
+		let newScale = snakeMini + snakeMax * ((distanceV - minY) / (maxY - minY));
+		if (newScale < snakeMini) {
+			newScale = snakeMini;
+		}
+		if (newScale > snakeMax) {
+			newScale = snakeMax;
+		}
+
+		// Flip horizontally if travelX is a positive integer
+		flip = travelX > 0 ? -1 : 1;
+		//apply flip to pre-animation
+		if (flip > 0) {
+			if (scale > 0) {
+				petDiv.style.setProperty('--prePetScaleX', scale);
+			} else {
+				petDiv.style.setProperty('--prePetScaleX', Math.abs(scale));
+			}
+		} else {
+			if (scale > 0) {
+				petDiv.style.setProperty('--prePetScaleX', scale * flip);
+			} else {
+				petDiv.style.setProperty('--prePetScaleX', scale);
+			}
+		}
+
+		
+
+		scale = newScale * flip;
+		petDiv.style.setProperty('--petTranslateX', `${travelX}px`);
+		petDiv.style.setProperty('--petTranslateY', `${travelY}px`);
+		petDiv.style.setProperty('--petScaleY', newScale);
+		petDiv.style.setProperty('--petScaleX', scale);
+		petDiv.style.transform = `scale(${scale}, ${newScale})`;
+		
+
+		// Add the 'animate' class to trigger the animation
+		Verb = 'walk';
+		updatePet();
+		petDiv.classList.remove('idle');
+		petDiv.classList.add('animate');
+
+		// After 3 seconds, change Verb to 'idle'
+		setTimeout(() => {
+			const initialL = petDiv.clientWidth * 0.25; // Use petDiv's width
+			const initialT = petDiv.clientHeight * 0.25; // Use petDiv's height
+
+			Verb = 'idle';
+			updatePet();
+			petDiv.classList.remove('animate');
+			petDiv.classList.add('idle');
+			petDiv.style.left = `${currentLeft + travelX}px`;
+			petDiv.style.top = `${currentTop + travelY}px`;
+			petDiv.style.setProperty('--prePetScaleY', newScale);
+		}, 3000);
+	}
+
+	// Brick Breaker scripts
+
+	var bbCanvas = document.getElementById("bbCanvas");
+    var bbCtx = bbCanvas.getContext("2d");
+
+	var bbIsPaused = true;
+	var bbPaddleHeight = 3;
+	var bbPaddleWidth = 15;
+	var bbPaddleX = (bbCanvas.width - bbCanvas.width * (bbPaddleWidth / 100)) / 2;
+	var bbBallRadius = 2.5;
+	var speedRatio = 0.03; // You can adjust this value
+	var bbSpeed = Math.min(bbCanvas.width, bbCanvas.height) * speedRatio;
+	var bbX = viewDiv.clientWidth / 2;
+	var bbY = viewDiv.clientHeight * 0.7;
+	var bbDx = bbSpeed;
+	var bbDy = -bbSpeed;
+
+	var bbBrickRowCount = 5;
+	var bbBrickColumnCount = 5;
+	var bbBrickWidth = 15;
+	var bbBrickHeight = 5;
+	var bbBrickPadding = 2;
+	var bbBrickOffsetTop = 5;
+	var bbBrickOffsetLeft = 7;
+
+	var bbBricks = [];
+	
+	var playTextDisplayed = true;
+
+	// Set up bricks
+        for (var c = 0; c < bbBrickColumnCount; c++) {
+            bbBricks[c] = [];
+            for (var r = 0; r < bbBrickRowCount; r++) {
+                var bbBrickX = c * (bbCanvas.width * (bbBrickWidth / 100) + bbCanvas.width * (bbBrickPadding / 100)) + bbCanvas.width * (bbBrickOffsetLeft / 100);
+                var bbBrickY = r * (bbCanvas.height * (bbBrickHeight / 100) + bbCanvas.height * (bbBrickPadding / 100)) + bbCanvas.height * (bbBrickOffsetTop / 100);
+                // Define red bricks
+                if ((c == 1 && r == 1) || (c == 3 && r == 2) || (c == 4 && r == 4)) {
+                    bbBricks[c][r] = { x: bbBrickX, y: bbBrickY, status: 2 }; // status 2 indicates a red brick
+                } else {
+                    bbBricks[c][r] = { x: bbBrickX, y: bbBrickY, status: 1 }; // status 1 indicates a regular brick
+                }
+            }
+        }
+
+        var bbPaddleDrag = false;
+
+        document.addEventListener("keydown", function (e) {
+            if (e.code === "Space") {
+                bbIsPaused = !bbIsPaused;
+            }
+        });
+
+        bbCanvas.addEventListener("mousedown", bbMouseDownHandler);
+        bbCanvas.addEventListener("mousemove", bbMouseMoveHandler);
+        bbCanvas.addEventListener("mouseup", bbMouseUpHandler);
+
+        function bbMouseDownHandler(e) {
+			var bbRelativeX = e.clientX - bbCanvas.offsetLeft;
+			if (bbRelativeX > 0 && bbRelativeX < bbCanvas.width) {
+				if (bbIsPaused) {
+					bbIsPaused = false;
+					playTextDisplayed = false;
+				}
+				bbPaddleDrag = true;
+			}
+		}
+
+        function bbMouseMoveHandler(e) {
+            if (bbPaddleDrag) {
+                var bbRelativeX = e.clientX - bbCanvas.offsetLeft;
+                if (bbRelativeX > 0 && bbRelativeX < bbCanvas.width) {
+                    bbPaddleX = bbRelativeX - bbCanvas.width * (bbPaddleWidth / 200);
+                }
+            }
+        }
+
+        function bbMouseUpHandler() {
+            bbPaddleDrag = false;
+        }
+
+        function bbDrawBall() {
+			// Create a gradient for the ball color
+			var blueBallGradient = bbCtx.createRadialGradient(bbX, bbY, 0, bbX, bbY, bbBallRadius);
+			blueBallGradient.addColorStop(0, '#DDDDDD'); // Lighter color at the center
+			blueBallGradient.addColorStop(1, '#035ead'); // Darker color at the edges
+
+			// Draw the ball with a white border
+			bbCtx.fillStyle = blueBallGradient;
+			bbCtx.beginPath();
+			bbCtx.arc(bbX, bbY, bbBallRadius * 5, 0, Math.PI * 2);
+			bbCtx.fill();
+
+			// Draw the white border
+			bbCtx.strokeStyle = '#FFFFFF';
+			bbCtx.lineWidth = 2; // Adjust the border width as needed
+			bbCtx.stroke();
+			bbCtx.closePath();
+		}
+
+		function bbDrawPaddle() {
+			var paddleWidth = bbCanvas.width * (bbPaddleWidth / 100);
+			var paddleHeight = bbCanvas.height * (bbPaddleHeight / 100);
+
+			// Create a gradient for the paddle color
+			var orangePaddleGradient = bbCtx.createLinearGradient(bbPaddleX, bbCanvas.height, bbPaddleX, bbCanvas.height - paddleHeight);
+			orangePaddleGradient.addColorStop(0, '#594625'); // Lighter color at the top
+			orangePaddleGradient.addColorStop(1, '#f0aa30'); // Darker color at the bottom
+
+			// Draw the paddle with a white border
+			bbCtx.fillStyle = orangePaddleGradient;
+			bbCtx.fillRect(bbPaddleX, bbCanvas.height - paddleHeight, paddleWidth, paddleHeight);
+
+			// Draw the white border
+			bbCtx.strokeStyle = '#FFFFFF';
+			bbCtx.strokeRect(bbPaddleX, bbCanvas.height - paddleHeight, paddleWidth, paddleHeight);
+		}
+
+
+
+
+
+        function bbDrawBricks() {
+			for (var c = 0; c < bbBrickColumnCount; c++) {
+				for (var r = 0; r < bbBrickRowCount; r++) {
+					if (bbBricks[c][r].status > 0) {
+						var brickWidth = bbCanvas.width * (bbBrickWidth / 100);
+						var brickHeight = bbCanvas.height * (bbBrickHeight / 100);
+						var brickPaddingX = bbCanvas.width * (bbBrickPadding / 100);
+						var brickPaddingY = bbCanvas.height * (bbBrickPadding / 100);
+						var brickX = c * (brickWidth + brickPaddingX) + bbCanvas.width * (bbBrickOffsetLeft / 100);
+						var brickY = r * (brickHeight + brickPaddingY) + bbCanvas.height * (bbBrickOffsetTop / 100);
+
+						bbBricks[c][r].x = brickX;
+						bbBricks[c][r].y = brickY;
+
+						// Draw the white border
+						bbCtx.beginPath();
+						bbCtx.fillStyle = "#FFFFFF";
+						bbCtx.fillRect(brickX, brickY, brickWidth, brickHeight);
+						bbCtx.closePath();
+
+						// Create a gradient for the brick color
+						var blueBrickGradient = bbCtx.createLinearGradient(brickX, brickY, brickX, brickY + brickHeight);
+						blueBrickGradient.addColorStop(0, '#91b6ff'); // Lighter color at the top
+						blueBrickGradient.addColorStop(1, '#17284a'); // Darker color at the bottom
+						var goldBrickGradient = bbCtx.createLinearGradient(brickX, brickY, brickX, brickY + brickHeight);
+						goldBrickGradient.addColorStop(0, '#f5cf53'); // Lighter color at the top
+						goldBrickGradient.addColorStop(1, '#4a3417'); // Darker color at the bottom
+
+						// Draw the colored brick
+						bbCtx.fillStyle = bbBricks[c][r].status === 2 ? goldBrickGradient : blueBrickGradient;
+						bbCtx.fillRect(brickX + 1, brickY + 1, brickWidth - 2, brickHeight - 2);
+					}
+				}
+			}
+		}
+
+        function bbCollisionDetection() {
+            for (var c = 0; c < bbBrickColumnCount; c++) {
+                for (var r = 0; r < bbBrickRowCount; r++) {
+                    var bbB = bbBricks[c][r];
+                    if (bbB.status > 0 && bbX > bbB.x && bbX < bbB.x + bbCanvas.width * (bbBrickWidth / 100) && bbY > bbB.y && bbY < bbB.y + bbCanvas.height * (bbBrickHeight / 100)) {
+                        bbDy = -bbDy;
+                        if (bbB.status === 2) {
+                            money++;
+                        }
+                        bbB.status = 0;
+						bars['fun-bar'].value ++;
+                    }
+                }
+            }
+            bbCheckWin(); // Check for a win after collision detection
+        }
+
+        function bbCheckWin() {
+            // Check if all bricks are hit
+            var allBricksHit = bbBricks.every(function (column) {
+                return column.every(function (brick) {
+                    return brick.status === 0;
+                });
+            });
+
+            if (allBricksHit) {
+                money += 2;
+                bbIsPaused = true;
+				
+				bars['sleep-bar'].value += 5;
+				setCookie('money', money);
+				setCookie('fun-bar', bars['fun-bar'].value);
+
+                document.location.reload();
+            }
+        }
+
+        function bbUpdate() {
+            if (bbIsPaused) {
+                return;
+            }
+
+            if (bbY + bbDy > bbCanvas.height - bbCanvas.height * (bbBallRadius / 100) - bbCanvas.height * (bbPaddleHeight / 100)) {
+                if (bbX > bbPaddleX && bbX < bbPaddleX + bbCanvas.width * (bbPaddleWidth / 100)) {
+                    var bbCollisionPoint = bbX - (bbPaddleX + bbCanvas.width * (bbPaddleWidth / 200));
+                    var bbNormalizedCollisionPoint = bbCollisionPoint / (bbCanvas.width * (bbPaddleWidth / 100) / 2);
+                    var bbDeflectionAngle = bbNormalizedCollisionPoint * Math.PI / 3;
+                    bbDx = bbSpeed * Math.sin(bbDeflectionAngle);
+                    bbDy = -bbSpeed * Math.cos(bbDeflectionAngle);
+                    return;
+                } else {
+					setCookie('money', money);
+                    document.location.reload();
+                }
+            }
+
+            bbX += bbDx;
+            bbY += bbDy;
+
+            if (bbX + bbDx > bbCanvas.width - bbCanvas.width * (bbBallRadius / 100) || bbX + bbDx < bbCanvas.width * (bbBallRadius / 100)) {
+                bbDx = -bbDx;
+            }
+
+            if (bbY + bbDy < bbCanvas.height * (bbBallRadius / 100)) {
+                bbDy = -bbDy;
+            }
+
+            bbCollisionDetection();
+        }
+
+	/* function bbResetGame() {
+		money -= 1;
+		bbIsPaused = true;
+
+		for (var c = 0; c < bbBrickColumnCount; c++) {
+                for (var r = 0; r < bbBrickRowCount; r++) {
+                    var status = (c == 1 && r == 1) || (c == 3 && r == 2) || (c == 4 && r == 4) ? 2 : 1;
+                    bbBricks[c][r].status = status;
+                }
+            }
+
+            bbPaddleX = (bbCanvas.width - bbCanvas.width * (bbPaddleWidth / 100)) / 2;
+            bbX = bbCanvas.width / 2;
+            bbY = bbCanvas.height * 0.9;
+
+            bbAnimate();
+        }*/
+
+	function bbDraw() {
+		bbCtx.clearRect(0, 0, bbCanvas.width, bbCanvas.height);
+		bbDrawBricks();
+		bbDrawBall();
+		bbDrawPaddle();
+		drawScore();
+	}
+
+	function bbAnimate() {
+		if (!bbIsPaused) {
+			bbUpdate();
+			bbDraw();
+		}
+		requestAnimationFrame(bbAnimate);
+	}
+
+	bbAnimate();
+  </script>
+</body>
+</html>

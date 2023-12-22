@@ -148,12 +148,10 @@
     }
 	.poop {
 		position: absolute;
-		top: 50%;
-		left: 50%;
-		width: 15%;
-		height: 15%;
-		backgroundImage: url('resources/poop.gif');
-		backgroundSize: cover;
+		width: 10%;
+		height: 10%;
+		background-image: url('resources/poop.gif');
+		background-size: cover;
 		display: none;
 		z-index: 2;
 	}
@@ -252,12 +250,22 @@
 	  };
 
 	  function initializePoopAbility() {
-		// Calculate initial target time
-		const targetTime = elapsedMinutes + getRandomNumber(30, 120);
+		  const poopDiv = document.querySelector('.poop');
+		  // Calculate initial target time
+		  const storedPoop = getCookie('poop');
+		  poop = storedPoop !== "" ? parseInt(storedPoop) : 0; // Update poop value
 
-		// Schedule the first poop appearance
-		schedulePoopAppearance(targetTime);
-	  }
+		  if (poop > 0) {
+			poopDiv.style.display = 'block';
+			poopDiv.style.width = poop * 10 + '%';
+			poopDiv.style.height = poop * 10 + '%';
+		  }
+
+		  const targetTime = elapsedMinutes + getRandomNumber(30, 120);
+
+		  // Schedule the first poop appearance
+		  schedulePoopAppearance(targetTime);
+		}
 
 	  function getRandomNumber(min, max) {
 		return Math.floor(Math.random() * (max - min + 1) + min);
